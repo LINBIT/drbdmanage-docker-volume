@@ -1,0 +1,125 @@
+% DRBDMANAGEDOCKERVOLUME(8) DRBDManage Docker Volume Plugin User Manuals
+% Roland Kammerer
+% May 24, 2016
+
+# NAME
+
+drbdmanage-docker-volume - a volume plugin for docker
+
+# SYNOPSIS
+
+docker volume [*dockeroptions*] --volume-driver=drbdmanage [*pluginoptions*]
+
+# DESCRIPTION
+
+drbdmange-docker-volume is a daemon that is usually socket-activated by
+*systemd(1)*. It reads http commands from a local socket and manages
+*drbdmanage(8)* resources that are replicated via *DRBD*.
+
+# DRBD TERMINOLOGY
+DRBD replicates data on a block level between multiple hosts. With DRBD it is
+possible that node alpha reads (and writes) data that is actually stored on
+ node bravo. In this case node alpha has a *diskless assignment* and node
+bravo has a *diskfull assignment*. While even diskless nodes can access the
+data in the cluster, the number of `diskfull assignments` is important,
+because it corresponds to the number of full replicas in the cluster. If for
+example there are *N* diskfull assignments in the cluster, *N-1* can fail
+beyond repair while the data is still stored for operation or recovery on the
+last diskfull node.
+
+# OPTIONS
+
+Plugin options are always given as options for the `docker` command and are
+therefore prefixed with `--opt`. See the *EXAMPLES* section for further
+information.
+
+\--opt fs=*FORMAT*
+:   Specify the file system that should be used for the new docker volume.
+	 *FORMAT* can be any file system that can be created and mounted on all
+	 cluster nodes where the volume should be available. If not specified, it
+	 defaults to `ext4`.
+
+\--opt fsopts=*OPTIONS*
+:   Specify additional options for file system creation as a string. These options
+	 are passed to the *mkfs* command. If not specified, it defaults to the
+	 empty string.
+
+\--opt size=*SIZE*
+:   Specify the size of the new docker volume in *MB*. The unit is always
+	 *MB*. If not specified, it defaults to a size of 100MB.
+
+\--opt nodes=*NODES*
+:   Specify a list of hosts this docker volume should be deployed to.
+    *NODES* is a comma separated list of node names as shown by
+	 *drbdmanage list-nodes*. A new volume is always deployed to these nodes
+	 as a `diskfull assignment`. Nodes not in the list, but in the DRBD cluster
+	 get a `diskless assignment`. If not specified, it defaults to the empty
+	 list. See `--opt replicas` and the end of the section for further
+	 information about the interaction between these two options.
+
+\--opt replicas=*COUNT*
+:   Specify the number of nodes this volume should be deployed `diskfull`. All
+    other nodes in the DRBD cluster get a `diskless assignment`. If not given
+	 it defaults to 2. See `--opt nodes` and the end of the section for
+	 further information about the interaction between these two options.
+
+If none of *replicas* and *nodes* is given, the default of *replicas* will be
+used. I.e., the new volume will be deployed `diskfull` to two nodes in the
+cluster and `diskless` to the rest.
+
+If both options, *replicas* and *nodes*, are given, the user given list of
+nodes will be taken into account and `replicas` is ignored. I.e., the new
+volume will be deployed to the given nodes `diskfull` and `diskless` to the
+rest.
+
+# EXAMPLES
+In the following we expect a cluster consisting of three nodes (alpha, bravo,
+and charlie).
+
+Example 1 (a typical life cycle):
+
+On node alpha:
+
+    $ docker volume create -d drbdmanage --name=dmvol \
+                           --opt fs=xfs --opt size=200
+    $ docker run -ti --name=cont \
+				 -v dmvol:/data --volume-driver=drbdmanage busybox sh
+    $ root@cont: echo "foo" > /data/test.txt
+    $ root@cont: exit
+    $ docker rm cont
+
+On node bravo:
+
+    $ docker run -ti --name=cont \
+				 -v dmvol:/data --volume-driver=drbdmanage busybox sh
+    $ root@cont: cat /data/test.txt
+      foo
+    $ root@cont: exit
+    $ docker rm cont
+    $ docker volume rm dmvol
+
+Example 2 (one diskfull assignment by name, two nodes diskless):
+
+    $ docker volume create -d drbdmanage --name=dmvol --opt hosts=bravo
+
+Example 3 (one diskfull assignment, no matter where, two nodes diskless):
+
+    $ docker volume create -d drbdmanage --name=dmvol --opt replicas=1
+
+Example 4 (two diskfull assignments by name, charly diskless):
+
+    $ docker volume create -d drbdmanage --name=dmvol --opt hosts=alpha,bravo
+
+Example 5 (two diskfull assignments, no matter where, one node diskless):
+
+    $ docker volume create -d drbdmanage --name=dmvol --opt replicas=2
+
+
+# SEE ALSO
+
+`drbdmanage` (8).
+The *README* file distributed with Pandoc contains full documentation.
+
+The source code and all documentation may be downloaded from
+<https://www.drbd.org/>.
+

@@ -1,0 +1,20 @@
+Source: drbdmanage-docker-volume
+Maintainer: LINBIT HA Solutions GmbH <drbd-dev@lists.linbit.com>
+Uploaders: Roland Kammerer <roland.kammerer@linbit.com>
+Section: python
+Priority: optional
+Build-Depends: debhelper (>= 9),
+               dh-python,
+               python-all (>= 2.6.6-3),
+Standards-Version: 3.9.6
+
+Package: drbdmanage-docker-volume
+Architecture: all
+Depends: docker.io (>= 1.8.0),
+         python-drbdmanage (>= 0.96),
+         ${misc:Depends},
+         ${python:Depends}
+Description: Docker volume plugin for DRBDManage
+ .
+ This plugin makes docker volumes high available by replicating
+ them via DRBD9 and DRBDManage.

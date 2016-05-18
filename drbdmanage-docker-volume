@@ -1,0 +1,290 @@
+#!/usr/bin/env python2
+
+# Copyright (C) 2016 LINBIT HA-Solutions GmbH
+# Author: Roland Kammerer <roland.kammerer@linbit.com>
+# Derived from Quobyte Inc, 2016 (also Apache 2.0)
+
+# Licensed under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+import BaseHTTPServer
+import errno
+import dbus
+import drbdmanage.consts as dm_const
+import drbdmanage.exceptions as dm_exc
+import drbdmanage.utils as dm_utils
+import json
+import os
+import socket
+import sys
+import time
+import urlparse
+import sys
+from BaseHTTPServer import BaseHTTPRequestHandler
+from drbdmanage.clienthelper import DrbdManageClientHelper
+
+PLUGIN_DIRECTORY = '/run/docker/plugins/'
+PLUGIN_SOCKET = os.path.join(PLUGIN_DIRECTORY, 'drbdmanage.sock')
+MOUNT_DIRECTORY = '/run/docker/drbdmanage/mnt'
+AUX_PROP_DOCKER_VOLUME = 'is-docker-volume'
+
+
+def makedirs(path):
+    try:
+        os.makedirs(path)
+    except OSError, e:
+        if e.errno != errno.EEXIST:
+            raise e
+
+
+class DrbdManageDriver(DrbdManageClientHelper):
+    initialized = False
+
+    def __init__(self):
+        if self.initialized:
+            return
+        super(DrbdManageDriver, self).__init__()
+        self.initialized = True
+
+
+class UDSServer(BaseHTTPServer.HTTPServer):
+    address_family = socket.AF_UNIX
+    socket_type = socket.SOCK_STREAM
+
+    def __init__(self, server_address, RequestHandlerClass):
+        if os.environ.get('LISTEN_PID', None) == str(os.getpid()):
+            SYSTEMD_FIRST_SOCKET_FD = 3
+            BaseHTTPServer.HTTPServer.__init__(self, server_address,
+                                               RequestHandlerClass, bind_and_activate=False)
+            self.socket = socket.fromfd(SYSTEMD_FIRST_SOCKET_FD,
+                                        self.address_family, self.socket_type)
+        else:
+            try:
+                os.unlink(server_address)
+            except OSError:
+                if os.path.exists(server_address):
+                    raise
+            self.socket = socket.socket(self.address_family, self.socket_type)
+            BaseHTTPServer.HTTPServer.__init__(self, server_address,
+                                               RequestHandlerClass, bind_and_activate=True)
+
+    def get_request(self):
+        ret = self.socket.accept()
+        return ret[0], 'uds'
+
+
+class DockerHandler(BaseHTTPRequestHandler):
+    mounts = {}
+    dm = DrbdManageDriver()
+
+    def res_exists(self, name):
+            return self.dm.res_exists(name,
+                                      dm_utils.dict_to_aux_props(
+                                          {AUX_PROP_DOCKER_VOLUME: True}
+                                      ))
+
+    @staticmethod
+    def _getmountpoint(name):
+        return os.path.join(MOUNT_DIRECTORY, name)
+
+    def getmountpoint(self, name):
+        """
+        Returns '' if not locally mounted, else mountpoint in the file system
+        """
+        path = self._getmountpoint(name)
+        if self.dm.is_locally_mounted(path):
+            return path
+        return ''
+
+    def get_request(self):
+        length = int(self.headers['content-length'])
+        return json.loads(self.rfile.read(length))
+
+    def respond(self, msg):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/vnd.docker.plugins.v1+json')
+        self.end_headers()
+        print 'Responding with', json.dumps(msg)
+        self.wfile.write(json.dumps(msg))
+
+    def do_POST(self):
+        if self.path == '/Plugin.Activate':
+            self.respond({'Implements': ['VolumeDriver']})
+            return
+
+        request = self.get_request()
+        print request
+        if 'Name' in request:
+            name = request['Name']
+            mountpoint = self.getmountpoint(name)
+        err_msg = ''
+
+        if self.path == '/VolumeDriver.Create':
+            fs = fs_opts = size = deploy_hosts = deploy_count = False
+
+            if 'Opts' in request and request['Opts']:
+                fs = request['Opts'].get('fs', False)
+                size = request['Opts'].get('size', False)
+                deploy_hosts = request['Opts'].get('nodes', False)
+                deploy_count = request['Opts'].get('replicas', False)
+                fs_opts = request['Opts'].get('fsopts', False)
+
+            if not fs:
+                fs = 'ext4'
+            if not fs_opts:
+                fs_opts = ''
+            if not size:
+                size = 100  # 100MB
+            size = int(size)
+            size *= 1024
+            if deploy_hosts:
+                deploy_hosts = deploy_hosts.split(',')
+            else:
+                deploy_hosts = []
+            if deploy_count:
+                deploy_count = int(deploy_count)
+            if deploy_hosts and deploy_count:  # hosts win
+                deploy_count = False
+            if not deploy_hosts and not deploy_count:
+                deploy_count = 2
+
+            exists = self.res_exists(name)
+
+            if not exists:
+                self.mounts[name] = 0
+                success = self.dm.create_volume(name,
+                                                dm_utils.dict_to_aux_props({
+                                                    AUX_PROP_DOCKER_VOLUME: True,
+                                                }), deploy_hosts, deploy_count, size)
+                if success:
+                    ret = 0
+                    path = self.dm.local_path(name)
+                    while True:
+                        try:
+                            with open(path, 'w') as dev:
+                                zeroblk = bytearray('\0')
+                                dev.write(zeroblk)
+                                break
+                        except IOError:
+                            time.sleep(2)
+
+                    ret = os.system('wipefs -a %s' % (path))
+                    ret = os.system('mkfs -t %s %s %s' % (fs, fs_opts, path))
+                    if ret != 0:
+                        err_msg = "Could not format %s (%s) as %s" % (name, path, fs)
+                else:
+                    err_msg = 'Could not create volume %s' % (name)
+
+            self.respond({'Err': err_msg})
+
+        elif self.path == '/VolumeDriver.Mount':
+            if self.res_exists(name):
+                if mountpoint == '':
+                    mountpoint = self._getmountpoint(name)
+                    makedirs(mountpoint)
+                    path = self.dm.local_path(name)
+
+                    ret = os.system('mount %s %s' % (path, mountpoint))
+                    if ret != 0:
+                        err_msg = 'Could not mount %s to %s' % (path, mountpoint)
+                    else:
+                        self.mounts[name] = 1
+                else:
+                    self.mounts[name] += 1
+            else:
+                err_msg = 'Volume %s does not exist' % (name)
+
+            self.respond({'Mountpoint': mountpoint, 'Err': err_msg})
+
+        elif self.path == "/VolumeDriver.Unmount":
+            if self.res_exists(name):
+                if mountpoint != '':
+                    if self.mounts[name] > 0:
+                        self.mounts[name] -= 1
+                    if self.mounts[name] == 0:
+                        ret = os.system('umount %s' % (mountpoint))
+                        if ret != 0:
+                            err_msg = 'Could not umount %s (%s)' % (name, mountpoint)
+                else:
+                    err_msg = 'Could not umount %s (%s) is not mounted' % (name, mountpoint)
+            else:
+                err_msg = 'Volume %s does not exist' % (name)
+
+            self.respond({'Err': err_msg})
+
+        elif self.path == '/VolumeDriver.Remove':
+            if self.res_exists(name):
+                mountstate = False
+                if name in self.mounts:
+                    mountstate = True if self.mounts[name] == 0 else False
+                else:
+                    mountstate = False  # I don't know this volume
+                    err_msg = 'Can not remove Volume %s, not under my control' % (name)
+
+                if mountpoint == '' and mountstate:
+                    try:
+                        os.rmdir(self._getmountpoint(name))
+                    except OSError, e:
+                        pass
+
+                    success = self.dm.delete_volume(name)
+                    if success:
+                        del(self.mounts[name])
+                    else:
+                        err_msg = 'Could not remove %s' % (name)
+                else:
+                    if not err_msg:  # could be already set by mountstate
+                        err_msg = 'Can not remove Volume %s, still in use' % (name)
+            else:
+                err_msg = 'Can not remove Volume %s, because it does not exist' % (name)
+
+            self.respond({'Err': err_msg})
+
+        elif self.path == '/VolumeDriver.Path':
+            self.respond({'Mountpoint': mountpoint, 'Err': ''})
+
+        elif self.path == '/VolumeDriver.Get':
+            if self.res_exists(name):
+                self.respond(
+                    {'Volume': {'Name': name, 'Mountpoint': mountpoint},
+                     'Err': ''})
+            else:
+                self.respond({'Err': 'Volume %s does not exist' % (name)})
+
+        elif self.path == '/VolumeDriver.List':
+            rl = self.dm.list_resource_names(dm_utils.dict_to_aux_props(
+                {AUX_PROP_DOCKER_VOLUME: True}
+            ))
+
+            result = [{'Name': v, 'Mountpoint': self.getmountpoint(v)} for v in rl]
+            self.respond({'Volumes': result, 'Err': ''})
+
+        else:
+            print 'Unknown API call:', self.path
+            self.respond({'Err': 'Unknown API call %s' % (self.path)})
+
+
+if __name__ == '__main__':
+    if not sys.platform.startswith('linux'):
+        print 'This is a GNU/Linux only plugin'
+        sys.exit(1)
+
+    makedirs(MOUNT_DIRECTORY)
+    makedirs(PLUGIN_DIRECTORY)
+
+    server = UDSServer(PLUGIN_SOCKET, DockerHandler)
+    print 'Starting server, use <Ctrl-C> to stop'
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        sys.exit(0)

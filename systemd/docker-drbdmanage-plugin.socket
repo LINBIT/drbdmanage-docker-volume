@@ -1,0 +1,9 @@
+[Unit]
+Description=DRBDmanage Docker Volume Plugin
+Documentation=https://www.drbd.org/en/doc/users-guide-90
+
+[Socket]
+ListenStream=/run/docker/plugins/drbdmanage.sock
+
+[Install]
+WantedBy=sockets.target

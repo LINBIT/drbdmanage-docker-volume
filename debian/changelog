@@ -1,0 +1,6 @@
+drbdmanage-docker-volume (0.1-1) experimental; urgency=medium
+
+  [ Roland Kammerer ]
+  * initial release
+
+ -- Roland Kammerer <roland.kammerer@linbit.com>  Wed, 24 May 2016 15:23:31 +0200
