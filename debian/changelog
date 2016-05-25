@@ -1,3 +1,11 @@
+drbdmanage-docker-volume (0.6-1) experimental; urgency=medium
+
+  * debian: fixed version
+  * doc: fixed leftover from pandoc
+  * build: set python to python2, check version strings
+
+ -- Roland Kammerer <roland.kammerer@linbit.com>  Wed, 25 May 2016 13:56:51 +0200
+
 drbdmanage-docker-volume (0.5-1) experimental; urgency=medium
 
   * Dummpy release
