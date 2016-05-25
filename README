@@ -118,7 +118,7 @@ Example 5 (two diskfull assignments, no matter where, one node diskless):
 # SEE ALSO
 
 `drbdmanage` (8).
-The *README* file distributed with Pandoc contains full documentation.
+The *README* file distributed with drbdmanage-docker-volume is the base for this man page.
 
 The source code and all documentation may be downloaded from
 <https://www.drbd.org/>.
