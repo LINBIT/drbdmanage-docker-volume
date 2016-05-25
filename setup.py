@@ -1,11 +1,36 @@
 #!/usr/bin/env python2
 
-from distutils.core import setup
+import os
+import sys
+
+from distutils.core import setup, Command
 
 DP_VERSION = '0.5'
 
 def get_version():
     return DP_VERSION
+
+class CheckUpToDate(Command):
+    description = "Check if version strings are up to date"
+    user_options = []
+
+    def initialize_options(self):
+        self.cwd = None
+
+    def finalize_options(self):
+        self.cwd = os.getcwd()
+
+    def run(self):
+        version = get_version()
+        try:
+            with open("debian/changelog") as f:
+                firstline = f.readline()
+                if version not in firstline:
+                    # returning false is not promoted
+                    sys.exit(1)
+        except IOError:
+            # probably a release tarball without the debian directory but with Makefile
+            return True
 
 # used to overwrite version tag by internal build tools
 # keep it, even if you don't understand it.
@@ -34,5 +59,8 @@ setup(
                                   'systemd/docker-drbdmanage-plugin.socket']),
         ('/usr/libexec/docker/', ['drbdmanage-docker-volume']),
         ('/usr/share/man/man8/', ['drbdmanage-docker-volume.8.gz']),
-    ]
+    ],
+    cmdclass={
+        'versionup2date': CheckUpToDate
+    }
 )

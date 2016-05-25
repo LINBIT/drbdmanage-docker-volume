@@ -1,11 +1,12 @@
 GIT = git
 INSTALLFILES=.installfiles
+PYTHON = python2
 override GITHEAD := $(shell test -e .git && $(GIT) rev-parse HEAD)
 
-# U := $(shell ./setup.py versionup2date >/dev/null 2>&1; echo $$?;)
+U := $(shell $(PYTHON) ./setup.py versionup2date >/dev/null 2>&1; echo $$?;)
 
 all:
-	python setup.py build
+	$(PYTHON) setup.py build
 
 drbdmanage-docker-volume.8.gz: README
 	pandoc -s -t man README -o drbdmanage-docker-volume.8
@@ -14,17 +15,25 @@ drbdmanage-docker-volume.8.gz: README
 doc: drbdmanage-docker-volume.8.gz
 
 install:
-	python setup.py install --record $(INSTALLFILES)
+	$(PYTHON) setup.py install --record $(INSTALLFILES)
 
 uninstall:
 	test -f $(INSTALLFILES) && cat $(INSTALLFILES) | xargs rm -rf || true
 	rm -f $(INSTALLFILES)
 
-release: clean doc
-	python setup.py sdist
+ifneq ($(U),0)
+up2date:
+	$(error "Update your Version strings/Changelogs")
+else
+up2date:
+	$(info "Version strings/Changelogs up to date")
+endif
+
+release: clean up2date doc
+	$(PYTHON) setup.py sdist
 	@echo && echo "Did you run distclean?"
 
-debrelease: clean doc
+debrelease: clean up2date doc
 	echo 'recursive-include debian *' >> MANIFEST.in
 	dh_clean
 	make release
@@ -36,10 +45,10 @@ deb:
 
 # it is up to you (or the buildenv) to provide a distri specific setup.cfg
 rpm:
-	python setup.py bdist_rpm
+	$(PYTHON) setup.py bdist_rpm
 
 clean:
-	python setup.py clean
+	$(PYTHON) setup.py clean
 
 distclean: clean
 	git clean -d -f || true
