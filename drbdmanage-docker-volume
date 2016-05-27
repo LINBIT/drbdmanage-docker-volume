@@ -229,22 +229,17 @@ class DockerHandler(BaseHTTPRequestHandler):
 
         elif self.path == '/VolumeDriver.Remove':
             if self.res_exists(name):
-                mountstate = False
-                if name in self.mounts:
-                    mountstate = True if self.mounts[name] == 0 else False
-                else:
-                    mountstate = False  # I don't know this volume
-                    err_msg = 'Can not remove Volume %s, not under my control' % (name)
-
-                if mountpoint == '' and mountstate:
+                ret = os.system('drbdsetup events2 --now %s | grep role:Primary' % (name))
+                if mountpoint == '' and ret != 0:
                     success = self.dm.delete_volume(name)
                     if success:
-                        del(self.mounts[name])
+                        # key might not exist, because driver never mounted it
+                        # this can be the case after a reboot
+                        self.mounts.pop(name, None)
                     else:
                         err_msg = 'Could not remove %s' % (name)
                 else:
-                    if not err_msg:  # could be already set by mountstate
-                        err_msg = 'Can not remove Volume %s, still in use' % (name)
+                    err_msg = 'Can not remove Volume %s, still in use' % (name)
             else:
                 err_msg = 'Can not remove Volume %s, because it does not exist' % (name)
 
