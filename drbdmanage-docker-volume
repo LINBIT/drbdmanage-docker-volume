@@ -213,7 +213,12 @@ class DockerHandler(BaseHTTPRequestHandler):
                         self.mounts[name] -= 1
                     if self.mounts[name] == 0:
                         ret = os.system('umount %s' % (mountpoint))
-                        if ret != 0:
+                        if ret == 0:
+                            try:
+                                os.rmdir(mountpoint)
+                            except OSError, e:
+                                pass
+                        else:
                             err_msg = 'Could not umount %s (%s)' % (name, mountpoint)
                 else:
                     err_msg = 'Could not umount %s (%s) is not mounted' % (name, mountpoint)
@@ -232,11 +237,6 @@ class DockerHandler(BaseHTTPRequestHandler):
                     err_msg = 'Can not remove Volume %s, not under my control' % (name)
 
                 if mountpoint == '' and mountstate:
-                    try:
-                        os.rmdir(self._getmountpoint(name))
-                    except OSError, e:
-                        pass
-
                     success = self.dm.delete_volume(name)
                     if success:
                         del(self.mounts[name])
