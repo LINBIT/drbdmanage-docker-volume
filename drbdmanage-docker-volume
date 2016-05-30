@@ -18,18 +18,13 @@
 # under the License.
 
 import BaseHTTPServer
-import errno
-import dbus
-import drbdmanage.consts as dm_const
-import drbdmanage.exceptions as dm_exc
 import drbdmanage.utils as dm_utils
+import errno
 import json
 import os
 import socket
 import sys
 import time
-import urlparse
-import sys
 from BaseHTTPServer import BaseHTTPRequestHandler
 from drbdmanage.clienthelper import DrbdManageClientHelper
 
@@ -42,7 +37,7 @@ AUX_PROP_DOCKER_VOLUME = 'is-docker-volume'
 def makedirs(path):
     try:
         os.makedirs(path)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.EEXIST:
             raise e
 
@@ -216,7 +211,7 @@ class DockerHandler(BaseHTTPRequestHandler):
                         if ret == 0:
                             try:
                                 os.rmdir(mountpoint)
-                            except OSError, e:
+                            except OSError:
                                 pass
                         else:
                             err_msg = 'Could not umount %s (%s)' % (name, mountpoint)
