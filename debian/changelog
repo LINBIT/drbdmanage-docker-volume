@@ -1,3 +1,10 @@
+drbdmanage-docker-volume (0.7-1) experimental; urgency=medium
+
+  * remove mountpoint as soon as possible
+  * allow removal of volumes if they have not been used
+
+ -- Roland Kammerer <roland.kammerer@linbit.com>  Mon, 30 May 2016 14:28:29 +0200
+
 drbdmanage-docker-volume (0.6-1) experimental; urgency=medium
 
   * debian: fixed version
