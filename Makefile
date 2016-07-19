@@ -45,7 +45,7 @@ deb:
 
 # it is up to you (or the buildenv) to provide a distri specific setup.cfg
 rpm:
-	$(PYTHON) setup.py bdist_rpm
+	$(PYTHON) setup.py bdist_rpm --pre-install ./docker-check-rpm.sh
 
 clean:
 	$(PYTHON) setup.py clean

@@ -2,3 +2,4 @@ include MANIFEST.in
 include COPYING
 include Makefile
 include drbdmanage-docker-volume.8.gz
+include docker-check-rpm.sh
