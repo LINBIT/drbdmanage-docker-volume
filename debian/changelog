@@ -1,3 +1,11 @@
+drbdmanage-docker-volume (0.7-2) experimental; urgency=medium
+
+  * pep/flake8 cleanups
+  * rpm: Work around rpm stupidity
+  * debian: also allow upstream docker as dependency
+
+ -- Roland Kammerer <roland.kammerer@linbit.com>  Mon, 22 Aug 2016 10:17:26 +0200
+
 drbdmanage-docker-volume (0.7-1) experimental; urgency=medium
 
   * remove mountpoint as soon as possible
