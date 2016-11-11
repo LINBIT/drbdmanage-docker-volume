@@ -10,10 +10,10 @@ Standards-Version: 3.9.6
 
 Package: drbdmanage-docker-volume
 Architecture: all
-Depends: docker.io (>= 1.8.0) | docker-engine (>= 1.8.0),
-         python-drbdmanage (>= 0.96),
+Depends: python-drbdmanage (>= 0.96),
          ${misc:Depends},
          ${python:Depends}
+Recommends: docker.io (>= 1.8.0) | docker-engine (>= 1.8.0)
 Description: Docker volume plugin for DRBDManage
  .
  This plugin makes docker volumes high available by replicating

@@ -1,3 +1,9 @@
+drbdmanage-docker-volume (0.7-3) experimental; urgency=medium
+
+  * Relax docker dependency
+
+ -- Roland Kammerer <roland.kammerer@linbit.com>  Fri, 11 Nov 2016 11:45:56 +0100
+
 drbdmanage-docker-volume (0.7-2) experimental; urgency=medium
 
   * pep/flake8 cleanups

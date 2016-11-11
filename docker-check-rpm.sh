@@ -7,5 +7,5 @@ dockerengine=$?
 
 if [ "$docker" = "1" -a "$dockerengine" = "1" ]; then
 	echo "Please install docker|docker-engine"
-	/bin/false
+	echo "If you use e.g., dvdcli, irgnore this message"
 fi
