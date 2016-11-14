@@ -5,7 +5,7 @@ import sys
 
 from distutils.core import setup, Command
 
-DP_VERSION = '0.7'
+DP_VERSION = '0.7.1'
 
 def get_version():
     return DP_VERSION

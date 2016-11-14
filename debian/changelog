@@ -1,3 +1,13 @@
+drbdmanage-docker-volume (0.7.1-1) experimental; urgency=medium
+
+  * pep/flake8 cleanups
+  * rpm: Work around rpm stupidity
+  * debian: also allow upstream docker as dependency
+  * Relax docker dependency
+  * Relax docker dependency for unit file
+
+ -- Roland Kammerer <roland.kammerer@linbit.com>  Mon, 14 Nov 2016 15:55:18 +0100
+
 drbdmanage-docker-volume (0.7-3) experimental; urgency=medium
 
   * Relax docker dependency
