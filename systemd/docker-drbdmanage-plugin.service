@@ -3,7 +3,8 @@ Description=DRBDmanage Docker Volume Plugin
 Documentation=https://www.drbd.org/en/doc/users-guide-90
 Before=docker.service
 After=network.target docker-drbdmanage-plugin.socket
-Requires=docker-drbdmanage-plugin.socket docker.service
+Requires=docker-drbdmanage-plugin.socket
+Wants=docker.service
 
 [Service]
 ExecStart=/usr/bin/python2 /usr/libexec/docker/drbdmanage-docker-volume
